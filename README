@@ -1,0 +1,2 @@
+for i in $(sudo ufw status | grep DENY | aek '{print $3}'); do echo "${i};_date_;_date_txt"; done > ips_ufw
+

@@ -1,0 +1,148 @@
+# -- Pareams to be rewritten by main code
+
+FIELD_SEPARATOR_CFG_FILE="="
+LABEL_PREV_DT="__label__"	
+
+AUTH_LOG_FILE1="_auth1_"
+AUTH_LOG_FILE2="_auth2_"
+	
+CUSTOM_LOG_FILE=".tmpLOG"
+TMP_FILE=".tmpSniff"	
+
+TRUE="_T_"
+FALSE="_F_"
+
+# --- Functions
+
+update_cfg() {
+	param=$(echo $1)
+	value=$(echo $2)
+	delFromFile "${param}${FIELD_SEPARATOR_CFG_FILE}" $file_cfg
+	echo "${param}${FIELD_SEPARATOR_CFG_FILE}${value}" >> $file_cfg 
+}
+
+read_from_cfg() {
+	param=$(echo $1)
+
+	for _lines in $(/bin/grep "${param}${FIELD_SEPARATOR_CFG_FILE}" $file_cfg \
+			| /bin/grep -v grep );
+	do
+		local _param_i=$(echo "${_lines}" \
+				| /usr/bin/awk -F"${FIELD_SEPARATOR_CFG_FILE}" '{print $1}')	
+		local _value_i=$(echo "${_lines}" \
+				| /usr/bin/awk -F"${FIELD_SEPARATOR_CFG_FILE}" '{print $2}')
+		is_eq=$(compare_strings "${_param_i}" "${param}" )
+		if [[ "${is_eq}"="${TRUE}" ]];
+		then
+			echo "${_value_i}"
+			return
+		fi	
+	done 
+}
+
+count_attempts_per_ip_in_file() {
+	local ip=$(echo "$1")
+	local filename=$(echo "$2")
+
+	/usr/bin/sudo /bin/cat "${filename}"\
+	| /bin/grep "Invalid.*${ip}"\
+	| /usr/bin/wc -l
+}
+
+find_line_at_log() {
+	# To find which line to start at log file
+	local last_epoch=$(read_from_cfg "$LABEL_PREV_DT")	
+	local last_dt=$(epoch2auth_file_dt "${last_epoch}" ) 
+	local num=$(/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+	| /bin/grep "${last_dt}"\
+	| /usr/bin/tail -n 1 \
+	| /usr/bin/awk -F" " '{print $1}')
+	if [[ "${num}" ]];
+	then
+		# Continue on next line
+		let num=num+1
+		echo "$num"
+	else
+		# Start from the beginning	
+		echo "1"
+	fi 
+}
+
+create_custom_log() {
+	local filename=$(echo $1)
+	local line_num=$(find_line_at_log)
+	let line_num=line_num
+	/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+	| /usr/bin/tail -n +"${line_num}" > $filename
+}
+
+compare_strings() {
+	if [[ "$1" = "$2" ]];
+	then
+		echo "$TRUE"
+	else
+		echo "$FALSE"
+	fi
+}
+
+strict_exists_in_f() {
+	# Compare whole text with file row
+	local text=$(echo "$1")
+	local file=$(echo "$2")
+	local EXISTS="$FALSE"
+	for text_i in $(/bin/grep "${file}" $2)
+	do
+		if [[ "$text_i" = "$text" ]];
+		then
+			echo "$TRUE"
+			return
+		fi
+	done
+	echo "$FALSE"
+}
+
+exists_in_file() {
+	local text=$(echo "$1")
+	local file=$(echo "$2")
+	# $1 text
+	# $2 filename	
+	local EXISTS=$(/bin/grep "${file}" $2)
+	if [[ $EXISTS ]];
+	then
+		echo "$TRUE"
+	else
+		echo "$FALSE"
+	fi
+}
+
+add2file() {
+	local text=$(echo "$1")
+	local filename=$(echo "$2")
+	
+	local already_in_file=$(strict_exists_in_f "$text" "$filename")
+	if [[ "$already_in_file" = "$FALSE" ]]
+	then
+		echo "$text" >> $filename
+	fi
+}
+
+add2fileWhithDate() {
+	local text=$(echo "$1")
+	local filename=$(echo "$2")
+	local already_in_file=$(exists_in_file "$text" "$filename")
+	if [[ "$already_in_file" = "$FALSE" ]]
+	then
+		local dt_epoch=$(curDate2epoch)	
+		local dt_txt=$(epoch2date "$dt_epoch")	
+		echo "${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt}" >> $filename
+	fi
+}
+
+delFromFile() {
+	local text=$(echo "$1")
+	local filename=$(echo "$2")
+
+	/bin/grep -v "$text" $filename > $TMP_FILE
+	# sed -i '/${text/d' $filename
+	/bin/mv $TMP_FILE $filename	
+} 

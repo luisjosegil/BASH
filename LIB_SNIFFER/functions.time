@@ -1,0 +1,31 @@
+# --- datetime manipulation functions 
+
+epochForLogFile() {
+	/usr/bin/sudo /usr/bin/stat -c %Y /var/log/auth.log
+}
+#date --date="Sep 25 11:52:53" +%s
+date2epochFormatA() {
+	# We expect date in 'Sep 25 11:52:53' format
+	/bin/date --date="${1}" +%s
+}
+
+curDate2epoch() {
+	/bin/date +"%s"
+	# Para tratarlo como número
+	# let num=$(...)
+}
+
+epoch2date() {
+	local datetime=$(echo $1)
+	let datetime=datetime
+	/bin/date -d @$datetime +'%Y-%m-%d %H:%M:%S'
+}
+
+epoch2auth_file_dt() {
+	# Format 'Feb 12 13:20:22'
+	local datetime=$(echo $1)
+	let datetime=datetime
+#	/bin/date -d @$datetime +'%b %d %H:%M:%S'
+	/bin/date -d @$datetime +'%b %e %H:%M:%S'
+}
+

@@ -1,0 +1,222 @@
+# --- UFW manipulation specific functions
+
+# -- Variables to be rewritten by main
+SSH_CONFIG_FILE="/etc/ssh/sshd_config"
+SSH_PORT="22"
+
+TRUE="_T_"
+FALSE="_F_"
+
+FIELD_SEPARATOR="=" 
+TMP_FILE=".tmp_u_01"
+TMP_UFW_FILE=".tmpUFW"
+CUSTOM_LOG_FILE=".customLOG"
+
+# ---- Colores
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+NC="\033[0m"
+
+MINS_EXPIRATION_RULE="1440"
+# --- Functions
+
+TXT_INVALID="Invalid"
+TXT_SSHD="sshd"
+TXT_SSH="ssh"
+# --- MESSAGES ------------------------------
+
+msg_ip_not_ufw() {
+	local num=$(echo "$1")
+	echo -e "${RED}IP ${num} not in UFW rules!${NC}"
+}
+
+msg_ip_removed_fw() {
+	local num=$(echo "$1")
+	echo -e "${RED}${num}${NC} removed from FW"
+}
+msg_err_ip_not_rmoved_fw() {
+	local num=$(echo "$1")
+	echo -e "${RED}ERROR. ${num}${NC} not removed from FW"
+}
+# --- END MESSAGES --------------------------
+ 
+retrieve_SSH_port() {
+	/bin/grep "Port " $SSH_CONFIG_FILE | /usr/bin/awk '{print $2}'
+}
+
+ban_ip_for_SSH() {
+	#echo -e "Ip ${RED}$ip${NC} to quarantine"
+	if /usr/bin/sudo ufw insert 1 deny from $1 to any port $SSH_PORT;
+	then
+		echo -e "Ip ${RED}$ip${NC} quarantined"
+	else
+		echo -e "${RED}ERROR. $ip${NC} not quarantined"
+	fi
+}
+
+check_if_ip_already_banned() {
+	# If IP in banned file -> True
+	local ip=$(echo "$1")
+	local IP_EXISTS=$(/bin/grep "$ip" $file_banned_ips)
+	if [[ $IP_EXISTS ]];
+	then
+		# IP already in UFW
+		echo "$TRUE"
+		return
+	else
+		if /usr/bin/sudo ufw status | /bin/grep "$ip";
+		then
+			echo "$TRUE"
+			return
+		fi
+	fi	
+	echo "$FALSE"
+}
+
+_ufw2file() {
+	# This file is just to eval
+	# whether an IP is already in UFW rules
+	/usr/bin/sudo ufw status | /bin/grep " DENY" > $TMP_UFW_FILE 
+}
+
+_remove_banned_ip_buffered() {
+	# This command must be used in collaboration with _ufw2file
+	local ip=$(echo "$1")
+	local rule_id=$(	/bin/cat $TMP_UFW_FILE \
+				| /bin/grep "${ip}" \
+				| /bin/grep "${SSH_PORT} " )
+
+	if [[ $rule_id ]];
+	then
+		remove_banned_ip "${ip}"	
+	else
+		msg_ip_not_ufw "${ip}" 
+	fi
+}
+
+remove_ufw_rule_by_id() {
+	local let rule_id=$1	
+	if /usr/bin/sudo ufw --force delete "${rule_id}";
+	then
+		msg_ip_removed_fw "${ip}"
+	else
+		msg_err_ip_not_rmoved_fw "${ip}"
+	fi
+}
+
+remove_banned_ip() {
+	local ip=$(echo "$1")
+	local rule_id=$(	/usr/bin/sudo ufw status numbered \
+				| /bin/grep "${ip}" \
+				| /bin/grep "${SSH_PORT} " \
+				| /usr/bin/cut -d"[" -f2 \
+				| /usr/bin/cut -d"]" -f1 )
+
+	if [[ $rule_id ]];
+	then
+		remove_ufw_rule_by_id "${rule_id}"
+	else
+		msg_ip_not_ufw "${ip}" 
+	fi
+}
+
+maintain_ip_ddbb() {
+	# Retrieve banned IPs ahd check
+	# whether is expired
+	_ufw2file
+	local file_banned_ips=$(echo $1)
+	local file_banned_ips_expired=$(echo $2)
+	local MINS_EXPIRATION_RULE=$(echo $3)
+
+	local dt_now=$(curDate2epoch)
+	local let lifetime_sec=$MINS_EXPIRATION_RULE*60
+	local let dt_limit=dt_now-lifetime_sec
+
+	for _line in $(	/usr/bin/cut -d$FIELD_SEPARATOR -f1,2 $file_banned_ips \
+			| /usr/bin/sort -u )
+	do
+		local ip=$(	echo "$_line"\
+			| /usr/bin/awk -F$FIELD_SEPARATOR '{print $1}')
+		local dt_ip=$(	echo "$_line"\
+			| /usr/bin/awk -F$FIELD_SEPARATOR '{print $2}')
+		let dt_res_ip=dt_ip-dt_limit
+		if [ "$dt_res_ip" -lt "0" ]
+		then
+			_remove_banned_ip_buffered "${ip}"
+			/bin/grep "${_line}" $file_banned_ips >> $file_banned_ips_expired
+			#echo "$_line" >> $file_banned_ips_expired
+			delFromFile "${ip}" "${file_banned_ips}"
+		fi
+	done
+	#rm -f $TMP_FILE
+}
+
+find_suspicious_ips() {
+	create_custom_log "$CUSTOM_LOG_FILE"
+
+	/bin/cat $CUSTOM_LOG_FILE \
+	| /bin/grep "${TXT_INVALID}"\
+	| /bin/grep "${TXT_SSHD}"\
+	| /bin/grep -v grep\
+	| /usr/bin/awk '{print $10}'\
+	| /usr/bin/sort -u
+}
+
+count_login_attepts_for_ip() {
+	if [ ! -f "$CUSTOM_LOG_FILE" ]; then
+		echo -e "${RED}count_login_attepts_for_ip.Working file doesn´t exist!${NC}"
+		return
+	fi
+	/bin/cat $CUSTOM_LOG_FILE \
+	| /bin/grep Invalid\
+	| /bin/grep sshd\
+	| /bin/grep $1\
+	| /bin/grep -v grep\
+	| wc -l 
+}
+
+find_suspicious_users() {
+	# Searching for suspicious logging attempts
+	if [ ! -f "$CUSTOM_LOG_FILE" ]; then
+		echo -e "${RED}find_suspicious_users.Working file doesn´t exist!${NC}"
+		return
+	fi
+	/bin/cat $CUSTOM_LOG_FILE \
+	| /bin/grep "${TXT_INVALID}"\
+	| /bin/grep "${TXT_SSH}"\
+	| /bin/grep -v " root " \
+	| /bin/grep -v " ljcd " \
+	| /bin/grep -v grep\
+	| /usr/bin/awk -F' ' '{print $8}' \
+	| /usr/bin/sort -u
+}
+
+find_users4ip() {
+	if [ ! -f "$CUSTOM_LOG_FILE" ]; then
+		echo -e "${RED}find_users4ip.Working file doesn´t exist!${NC}"
+		return
+	fi
+	/bin/cat $CUSTOM_LOG_FILE \
+	| /bin/grep "$1" \
+	| /bin/grep "${TXT_INVALID}"\
+	| /bin/grep "${TXT_SSH}"\
+	| /bin/grep -v " root " \
+	| /bin/grep -v " ljcd " \
+	| /bin/grep -v grep\
+	| /usr/bin/awk -F' ' '{print $8}' \
+	| /usr/bin/sort -u
+}
+
+find_ips_for_user() {
+	# Which IPs are trying to access with this user?
+	if [ ! -f "$CUSTOM_LOG_FILE" ]; then
+		echo -e "${RED}find_ips_for_user.Working file doesn´t exist!${NC}"
+		return
+	fi
+	/bin/cat $CUSTOM_LOG_FILE \
+	| /bin/grep Invalid \
+	| /bin/grep " $1 " \
+	| /usr/bin/awk -F' ' '{print $10}' \
+	| /usr/bin/sort -u
+}
+
