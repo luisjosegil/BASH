@@ -1,4 +1,8 @@
-# --- datetime manipulation functions 
+# 	datetime manipulation functions 
+#
+#       Version 1.2     18-10-2018
+#       Just version control added
+#
 
 epochForLogFile() {
 	/usr/bin/sudo /usr/bin/stat -c %Y /var/log/auth.log

@@ -1,4 +1,9 @@
-# -- Pareams to be rewritten by main code
+#
+# 	Pareams to be rewritten by main code
+#
+#       Version 1.2     18-10-2018
+#       Just version control added
+#
 
 FIELD_SEPARATOR_CFG_FILE="="
 LABEL_PREV_DT="__label__"	

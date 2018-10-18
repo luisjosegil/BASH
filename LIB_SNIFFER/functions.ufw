@@ -1,4 +1,8 @@
-# --- UFW manipulation specific functions
+# 	UFW manipulation specific functions
+#
+#       Version 1.2     18-10-2018
+#       Just version control added
+#
 
 # -- Variables to be rewritten by main
 SSH_CONFIG_FILE="/etc/ssh/sshd_config"
