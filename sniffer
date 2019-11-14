@@ -40,7 +40,7 @@ do
                 echo -e "IP ${GREEN}$ip${NC} in whitelist"
         else
                 # usernames to file
-                for user in $(find_users4ip)
+                for user in $(find_users4ip "${ip}")
                 do
                         add2file "${user}" "${file_bad_boys}"
                 done
@@ -71,4 +71,3 @@ maintain_ip_ddbb        "${file_banned_ips}" \
                         "${MINS_EXPIRATION_RULE}"
 
 # --- END ------------------------------------------
-
