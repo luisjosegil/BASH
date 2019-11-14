@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-#	Version 1.2	18-10-2018
-#	Just version control added
+#       Version 1.2     18-10-2018
+#       Just version control added
 #
 
 PATH="/home/ljcd/LABO/BASH"
@@ -16,7 +16,7 @@ source ${PATH}/${LIB_PATH}/functions.ufw
 # --- common datetime manipulation functions
 source ${PATH}/${LIB_PATH}/functions.time
 
-# --- Config params 
+# --- Config params
 source ${PATH}/sniffer.CONFIG
 
 # --- MAIN --------------------------------------------------
@@ -25,49 +25,50 @@ SSH_PORT=$(retrieve_SSH_port)
 # --- Follow new attack attempts --------------------
 bad_ips_counter="0"
 is_ip_banned=$(echo "$FALSE")
-for ip in $(find_suspicious_ips) 
+for ip in $(find_suspicious_ips)
 do
-	ip_to_ignore=$( exists_in_file "${ip}" "${file_whitelist_ips}" )
-	attempts_f1=$(count_attempts_per_ip_in_file "${ip}" "${AUTH_LOG_FILE1}")
-	attempts_f2=$(count_attempts_per_ip_in_file "${ip}" "${AUTH_LOG_FILE2}")
-	echo -e "IP ${ip}. ${attempts_f1} in ${AUTH_LOG_FILE1}. ${attempts_f2} in ${AUTH_LOG_FILE2}."
-	# -- Count if it exceeds max attempts
-	# 	---
-	# ATTEMPS_PER_IP
+        ip_to_ignore=$( exists_in_file "${ip}" "${file_whitelist_ips}" )
+        attempts_f1=$(count_attempts_per_ip_in_file "${ip}" "${AUTH_LOG_FILE1}")
+        attempts_f2=$(count_attempts_per_ip_in_file "${ip}" "${AUTH_LOG_FILE2}")
+        echo -e "IP ${ip}. ${attempts_f1} in ${AUTH_LOG_FILE1}. ${attempts_f2} in ${AUTH_LOG_FILE2}."
+        # -- Count if it exceeds max attempts
+        #       ---
+        # ATTEMPS_PER_IP
 
-	if [[ "$ip_to_ignore" = "$TRUE" ]];
-	then
-		echo -e "IP ${GREEN}$ip${NC} in whitelist"
-	else
-		# usernames to file 
-		for user in $(find_users4ip)
-		do
-			add2file "${user}" "${file_bad_boys}"
-		done
+        if [[ "$ip_to_ignore" = "${TRUE}" ]];
+        then
+                echo -e "IP ${GREEN}$ip${NC} in whitelist"
+        else
+                # usernames to file
+                for user in $(find_users4ip)
+                do
+                        add2file "${user}" "${file_bad_boys}"
+                done
 
-		is_ip_banned=$( check_if_ip_already_banned "${ip}" )
-		if [[ "$is_ip_banned" = "$TRUE" ]];
-		then
-			echo -e "Ip ${RED}$ip${NC} already quarantined"
-		else
-			#echo -e "Ip ${RED}$ip${NC} to quarantine"
-			let bad_ips_counter=bad_ips_counter+1
-			ban_ip_for_SSH "${ip}"
-			add2fileWhithDate "${ip}" "${file_banned_ips}"
-		fi
-	fi
+                is_ip_banned=$( check_if_ip_already_banned "${ip}" )
+                if [[ "$is_ip_banned" = "${TRUE}" ]];
+                then
+                        echo -e "Ip ${RED}${ip}${NC} already quarantined"
+                else
+                        #echo -e "Ip ${RED}$ip${NC} to quarantine"
+                        let bad_ips_counter=bad_ips_counter+1
+                        ban_ip_for_SSH "${ip}"
+                        add2fileWhithDate "${ip}" "${file_banned_ips}"
+                fi
+        fi
 done
 cur_dt=$(/bin/date +"%Y-%m-%d %T")
 epoch_dt_new=$(epochForLogFile)
 update_cfg "${LABEL_PREV_DT}" "${epoch_dt_new}"
 if [[ "${bad_ips_counter}" -ne "0" ]]
 then
-	echo -e "${cur_dt} ${bad_ips_counter} IPs added to firewall rules"
+        echo -e "${cur_dt} ${bad_ips_counter} IPs added to firewall rules"
 fi
 # --- Remove expired IPs from     ------------------
-#	firewall and control file
-maintain_ip_ddbb 	"${file_banned_ips}" \
-			"${file_banned_ips_expired}" \
-			"${MINS_EXPIRATION_RULE}"
+#       firewall and control file
+maintain_ip_ddbb        "${file_banned_ips}" \
+                        "${file_banned_ips_expired}" \
+                        "${MINS_EXPIRATION_RULE}"
 
 # --- END ------------------------------------------
+
