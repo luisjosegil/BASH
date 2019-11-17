@@ -1,8 +1,7 @@
 #
-# 	Pareams to be rewritten by main code
+# 	TEST control added
 #
-#       Version 1.2     18-10-2018
-#       Just version control added
+#       Version 1.3     17-11-2019
 #
 
 FIELD_SEPARATOR_CFG_FILE="="
@@ -14,8 +13,10 @@ AUTH_LOG_FILE2="_auth2_"
 CUSTOM_LOG_FILE=".tmpLOG"
 TMP_FILE=".tmpSniff"	
 
-TRUE="_T_"
-FALSE="_F_"
+
+# this common lib is necessary
+# loaded in main code
+#source common.lib
 
 # --- Functions
 
@@ -56,29 +57,42 @@ count_attempts_per_ip_in_file() {
 
 find_line_at_log() {
 	# To find which line to start at log file
-	local last_epoch=$(read_from_cfg "$LABEL_PREV_DT")	
+	local last_epoch=$(read_from_cfg "${LABEL_PREV_DT}")	
 	local last_dt=$(epoch2auth_file_dt "${last_epoch}" ) 
-	local num=$(/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
-	| /bin/grep "${last_dt}"\
-	| /usr/bin/tail -n 1 \
-	| /usr/bin/awk -F" " '{print $1}')
+	local num=$(	/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+			| /bin/grep "${last_dt}"\
+			| /usr/bin/tail -n 1 \
+			| /usr/bin/awk -F" " '{print $1}')
 	if [[ "${num}" ]];
 	then
 		# Continue on next line
 		let num=num+1
-		echo "$num"
+		echo "${num}"
 	else
 		# Start from the beginning	
 		echo "1"
 	fi 
 }
 
+count_num_lines() {
+	/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+	| /usr/bin/wc -l
+}
+
 create_custom_log() {
-	local filename=$(echo $1)
+	# removes all processed lines in LOG file 
+	local filename="${1}"
 	local line_num=$(find_line_at_log)
-	let line_num=line_num
-	/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
-	| /usr/bin/tail -n +"${line_num}" > $filename
+	if [ "${line_num}" != "1" ]
+	then
+		local total_lines=$( count_num_lines )
+		let num_lines_to_show=total_lines-line_num
+		/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+			| /usr/bin/tail -n "${num_lines_to_show}" > $filename
+	else
+		/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"
+	
+	fi 
 }
 
 compare_strings() {
@@ -92,23 +106,23 @@ compare_strings() {
 
 strict_exists_in_f() {
 	# Compare whole text with file row
-	local text=$(echo "$1")
-	local file=$(echo "$2")
+	local text="${1}"
+	local file="${2}"
 	local EXISTS="$FALSE"
 	for text_i in $(/bin/grep "${file}" $2)
 	do
 		if [[ "$text_i" = "$text" ]];
 		then
-			echo "$TRUE"
+			echo "${TRUE}"
 			return
 		fi
 	done
-	echo "$FALSE"
+	echo "${FALSE}"
 }
 
 exists_in_file() {
-	local text=$(echo "$1")
-	local file=$(echo "$2")
+	local text="${1}"
+	local file="${2}"
 	# $1 text
 	# $2 filename	
 	local EXISTS=$(/bin/grep "${file}" $2)
@@ -121,8 +135,8 @@ exists_in_file() {
 }
 
 add2file() {
-	local text=$(echo "$1")
-	local filename=$(echo "$2")
+	local text="${1}"
+	local filename="${2}"
 	
 	local already_in_file=$(strict_exists_in_f "$text" "$filename")
 	if [[ "$already_in_file" = "$FALSE" ]]
@@ -132,22 +146,36 @@ add2file() {
 }
 
 add2fileWhithDate() {
-	local text=$(echo "$1")
-	local filename=$(echo "$2")
+	local text="${1}"
+	local filename="${2}"
 	local already_in_file=$(exists_in_file "$text" "$filename")
-	if [[ "$already_in_file" = "$FALSE" ]]
+	if [[ "${already_in_file}" = "${FALSE}" ]]
 	then
 		local dt_epoch=$(curDate2epoch)	
 		local dt_txt=$(epoch2date "$dt_epoch")	
-		echo "${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt}" >> $filename
+		if [[ "${TEST_MODE}" == "${TRUE}" ]]
+		then
+			echo -e "${RED}TEST MODE.${NC}"	
+			echo "add2fileWhithDate ${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt} -> ${filename}"
+		else
+			echo "${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt}" >> ${filename}
+		fi
 	fi
 }
 
 delFromFile() {
-	local text=$(echo "$1")
-	local filename=$(echo "$2")
+	# Removes lines that begin with TEXTxxx
+	local text="${1}"
+	local filename="${2}"
 
-	/bin/grep -v "$text" $filename > $TMP_FILE
-	# sed -i '/${text/d' $filename
-	/bin/mv $TMP_FILE $filename	
+	if [[ "${TEST_MODE}" == "${TRUE}" ]]
+	then
+		echo -e "${RED}TEST MODE.${NC}"	
+		echo -e "delFromFile ${text} from ${filename}"
+		/bin/grep -v "^${text}" ${filename}
+	else
+		/bin/grep -v "^${text}" ${filename} > ${TMP_FILE}
+		/bin/mv ${TMP_FILE} ${filename}	
+	fi
+	return
 } 
