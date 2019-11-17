@@ -6,6 +6,8 @@
 
 PATH="/home/ljcd/LABO/BASH"
 LIB_PATH="LIB_SNIFFER"
+# --- Common to all LIB functions
+source ${PATH}/${LIB_PATH}/common.lib
 
 # --- common functions for file manipulations
 source ${PATH}/${LIB_PATH}/functions.files
@@ -20,7 +22,7 @@ source ${PATH}/${LIB_PATH}/functions.time
 source ${PATH}/sniffer.CONFIG
 
 # --- MAIN --------------------------------------------------
-SSH_PORT=$(retrieve_SSH_port)
+#SSH_PORT=$(retrieve_SSH_port)
 
 # --- Follow new attack attempts --------------------
 bad_ips_counter="0"
@@ -50,6 +52,7 @@ do
                 then
                         echo -e "Ip ${RED}${ip}${NC} already quarantined"
                 else
+			# PENDING TO ADD CONTROL BY NUMBER OF ATTEMPTS
                         #echo -e "Ip ${RED}$ip${NC} to quarantine"
                         let bad_ips_counter=bad_ips_counter+1
                         ban_ip_for_SSH "${ip}"
