@@ -1,0 +1,18 @@
+#
+#       V1.3     11-2019
+#
+
+
+# ---- Colores
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+NC="\033[0m"
+
+# --- Constantes generales
+TRUE="__True__"
+FALSE="__False__"
+
+FIELD_SEPARATOR=";"
+FIELD_SEPARATOR_CFG_FILE="="
+
+TEST_MODE="${FALSE}"
