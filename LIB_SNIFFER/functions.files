@@ -1,7 +1,8 @@
+#!/bin/bash
 #
 # 	Pareams to be rewritten by main code
 #
-#       Version 1.2     18-10-2018
+#       v1.3     11-2018
 #       Just version control added
 #
 
@@ -14,140 +15,203 @@ AUTH_LOG_FILE2="_auth2_"
 CUSTOM_LOG_FILE=".tmpLOG"
 TMP_FILE=".tmpSniff"	
 
-TRUE="_T_"
-FALSE="_F_"
+TXT_INVALID="Invalid user"
+
+# this common lib is necessary
+# loaded in main code
+#source common.lib
 
 # --- Functions
 
-update_cfg() {
-	param=$(echo $1)
-	value=$(echo $2)
-	delFromFile "${param}${FIELD_SEPARATOR_CFG_FILE}" $file_cfg
-	echo "${param}${FIELD_SEPARATOR_CFG_FILE}${value}" >> $file_cfg 
+function update_cfg() {
+	# Reviewd 2019-11-18
+	param="${1}"
+	value="${2}"
+	# La línea comienza por el parámetro, y sigue con un =
+	delFromFile "^${param}${FIELD_SEPARATOR_CFG_FILE}" ${file_cfg}
+	if [[ ${TEST_MODE} == ${TRUE} ]]
+	then
+		echo -e "${RED}TEST MODE.${NC} update_cfg()"	
+		echo -e "${param}${FIELD_SEPARATOR_CFG_FILE}${value} should be added to ${file_cfg}" 
+	else
+		echo -e "${param}${FIELD_SEPARATOR_CFG_FILE}${value}" >> ${file_cfg}
+	fi
 }
 
-read_from_cfg() {
-	param=$(echo $1)
-
-	for _lines in $(/bin/grep "${param}${FIELD_SEPARATOR_CFG_FILE}" $file_cfg \
-			| /bin/grep -v grep );
+function read_from_cfg() {
+	# Reviewd 2019-11-18
+	param="${1}"
+	# La línea comienza por el parámetro, y sigue con un =
+	for _lines in $(/bin/grep "^${param}${FIELD_SEPARATOR_CFG_FILE}" ${file_cfg} \
+			| /bin/grep -v grep )
 	do
 		local _param_i=$(echo "${_lines}" \
 				| /usr/bin/awk -F"${FIELD_SEPARATOR_CFG_FILE}" '{print $1}')	
 		local _value_i=$(echo "${_lines}" \
 				| /usr/bin/awk -F"${FIELD_SEPARATOR_CFG_FILE}" '{print $2}')
-		is_eq=$(compare_strings "${_param_i}" "${param}" )
-		if [[ "${is_eq}"="${TRUE}" ]];
+
+		if [[ ${_param_i} == ${param} ]]
 		then
 			echo "${_value_i}"
-			return
 		fi	
 	done 
 }
 
-count_attempts_per_ip_in_file() {
-	local ip=$(echo "$1")
-	local filename=$(echo "$2")
+function count_attempts_per_ip_in_file() {
+	# Reviewd 2019-11-18
+	local ip="${1}"
+	local filename="${2}"
 
-	/usr/bin/sudo /bin/cat "${filename}"\
-	| /bin/grep "Invalid.*${ip}"\
+	/usr/bin/sudo /bin/grep "${TXT_INVALID}.*${ip}" "${filename}" \
 	| /usr/bin/wc -l
+	# | /bin/grep "Invalid.*${ip}" \
+	#/usr/bin/sudo /bin/cat "${filename}" \
+	#| /bin/grep "${TXT_INVALID}.*${ip}" \
+	#| /usr/bin/wc -l
 }
 
-find_line_at_log() {
+function find_line_at_log() {
+	# Reviewd 2019-11-18
 	# To find which line to start at log file
-	local last_epoch=$(read_from_cfg "$LABEL_PREV_DT")	
+
+	local last_epoch=$(read_from_cfg "${LABEL_PREV_DT}")	
 	local last_dt=$(epoch2auth_file_dt "${last_epoch}" ) 
-	local num=$(/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
-	| /bin/grep "${last_dt}"\
-	| /usr/bin/tail -n 1 \
-	| /usr/bin/awk -F" " '{print $1}')
-	if [[ "${num}" ]];
+
+	# We could count first "${last_dt}" labels
+	# if > 1 -> rm all and return 0
+
+	local num=$(	/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}" \
+			| /bin/grep "${last_dt}" \
+			| /usr/bin/tail -n 1 \
+			| /usr/bin/awk -F" " '{print $1}')
+
+	if [[ "${num}" ]]
 	then
 		# Continue on next line
 		let num=num+1
-		echo "$num"
+		echo "${num}"
 	else
 		# Start from the beginning	
-		echo "1"
+		echo "0"
 	fi 
 }
 
-create_custom_log() {
-	local filename=$(echo $1)
-	local line_num=$(find_line_at_log)
-	let line_num=line_num
-	/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
-	| /usr/bin/tail -n +"${line_num}" > $filename
+function count_num_lines() {
+	# Reviewd 2019-11-18
+	/usr/bin/sudo /bin/cat -n "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+	| /usr/bin/wc -l
 }
 
-compare_strings() {
-	if [[ "$1" = "$2" ]];
+function create_custom_log() {
+	# Reviewd 2019-11-18
+	# removes all processed lines in LOG file 
+	local filename="${1}"
+	local line_num=$(find_line_at_log)
+
+	# Aqu'i haria falta anadir un grep "Failed password" 
+
+	if (( ${line_num} > 0 ))
 	then
-		echo "$TRUE"
+		local total_lines=$( count_num_lines )
+		let num_lines_to_show=total_lines-line_num
+		/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}"\
+			| /usr/bin/tail -n "${num_lines_to_show}" > ${filename}
 	else
-		echo "$FALSE"
+		/usr/bin/sudo /bin/cat "${AUTH_LOG_FILE1}" "${AUTH_LOG_FILE2}" > ${filename}
+	fi 
+}
+
+function compare_strings() {
+	# Reviewd 2019-11-18
+	if [[ ${1} = ${2} ]]
+	then
+		echo "${TRUE}"
+	else
+		echo "${FALSE}"
 	fi
 }
 
-strict_exists_in_f() {
+function strict_exists_in_f() {
+	# Reviewd 2019-11-18
 	# Compare whole text with file row
-	local text=$(echo "$1")
-	local file=$(echo "$2")
-	local EXISTS="$FALSE"
-	for text_i in $(/bin/grep "${file}" $2)
+	local text="${1}"
+	local file="${2}"
+
+	for text_i in $(/bin/grep "${text}" ${file})
 	do
-		if [[ "$text_i" = "$text" ]];
+		if [[ ${text_i} == ${text} ]]
 		then
-			echo "$TRUE"
+			echo "${TRUE}"
 			return
 		fi
 	done
-	echo "$FALSE"
+	echo "${FALSE}"
 }
 
-exists_in_file() {
-	local text=$(echo "$1")
-	local file=$(echo "$2")
-	# $1 text
-	# $2 filename	
-	local EXISTS=$(/bin/grep "${file}" $2)
-	if [[ $EXISTS ]];
+function exists_in_file() {
+	# Reviewd 2019-11-18
+	local text="${1}"
+	local file="${2}"
+
+	local EXISTS=$(/bin/grep "${text}" ${file})
+	if [[ ${EXISTS} ]]
 	then
-		echo "$TRUE"
+		echo "${TRUE}"
 	else
-		echo "$FALSE"
+		echo "${FALSE}"
 	fi
 }
 
-add2file() {
-	local text=$(echo "$1")
-	local filename=$(echo "$2")
+function add2file() {
+	# Reviewd 2019-11-18
+	local text="${1}"
+	local filename="${2}"
 	
-	local already_in_file=$(strict_exists_in_f "$text" "$filename")
-	if [[ "$already_in_file" = "$FALSE" ]]
+	local already_in_file=$( strict_exists_in_f "${text}" "${filename}" )
+	if [[ ${already_in_file} == ${FALSE} ]]
 	then
-		echo "$text" >> $filename
+		if [[ ${TEST_MODE} == ${TRUE} ]]
+		then
+			echo -e "${RED}TEST MODE.${NC} add2file()"	
+			echo -e "${text} to ${filename}"
+		else
+			echo "${text}" >> ${filename}
+		fi
 	fi
 }
 
-add2fileWhithDate() {
-	local text=$(echo "$1")
-	local filename=$(echo "$2")
-	local already_in_file=$(exists_in_file "$text" "$filename")
-	if [[ "$already_in_file" = "$FALSE" ]]
+function add2fileWhithDate() {
+	# Reviewd 2019-11-18
+	local text="${1}"
+	local filename="${2}"
+	local already_in_file=$( exists_in_file "${text}" "${filename}" )
+	if [[ ${already_in_file} == ${FALSE} ]]
 	then
 		local dt_epoch=$(curDate2epoch)	
-		local dt_txt=$(epoch2date "$dt_epoch")	
-		echo "${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt}" >> $filename
+		local dt_txt=$(epoch2date "${dt_epoch}")	
+		if [[ ${TEST_MODE} == ${TRUE} ]]
+		then
+			echo -e "${RED}TEST MODE.${NC}"	
+			echo "add2fileWhithDate ${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt} -> ${filename}"
+		else
+			echo "${text}${FIELD_SEPARATOR}${dt_epoch}${FIELD_SEPARATOR}${dt_txt}" >> ${filename}
+		fi
 	fi
 }
 
-delFromFile() {
-	local text=$(echo "$1")
-	local filename=$(echo "$2")
+function delFromFile() {
+	# Reviewd 2019-11-18
+	# Removes lines  tt contain this text 
+	local text="${1}"
+	local filename="${2}"
 
-	/bin/grep -v "$text" $filename > $TMP_FILE
-	# sed -i '/${text/d' $filename
-	/bin/mv $TMP_FILE $filename	
+	if [[ ${TEST_MODE} == ${TRUE} ]]
+	then
+		echo -e "${RED}TEST MODE.${NC}"	
+		echo -e "delFromFile ${text} from ${filename}"
+		/bin/grep -v "${text}" ${filename}
+	else
+		/bin/grep -v "${text}" ${filename} > ${TMP_FILE}
+		/bin/mv ${TMP_FILE} ${filename}	
+	fi
 } 
