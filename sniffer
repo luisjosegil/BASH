@@ -1,24 +1,23 @@
 #!/bin/bash
 #
-#       V1.3     11-2019
-#       Deep code revision
-#	sniffer modified
-#	LIBs modified 
+#       V1.4     09-2021
+#       ufw deny modified
+#	minor grammar changes
 #
 
-PATH="/home/ljcd/LABO/BASH"
-LIB_PATH="LIB_SNIFFER"
+PATH="/home/ljcd/LABO/BASH/SNIFFER"
+LIB_PATH="$PATH/LIB_SNIFFER"
 # --- Common to all LIB functions
-source ${PATH}/${LIB_PATH}/common.lib
+source ${LIB_PATH}/common.lib
 
 # --- common functions for file manipulations
-source ${PATH}/${LIB_PATH}/functions.files
+source ${LIB_PATH}/functions.files
 
 # functions for UFW manipulation
-source ${PATH}/${LIB_PATH}/functions.ufw
+source ${LIB_PATH}/functions.ufw
 
 # --- common datetime manipulation functions
-source ${PATH}/${LIB_PATH}/functions.time
+source ${LIB_PATH}/functions.time
 
 # --- Config params
 source ${PATH}/sniffer.CONFIG
@@ -32,6 +31,7 @@ is_ip_banned="${FALSE}"
 for ip in $(_suspicious_ips_using_usr_pwd)
 #for ip in $(find_suspicious_ips)
 do
+	echo "IP ${ip} to be analysed"
 	# Is IP in whitelist? ---------------------------
 	ip_to_ignore=$( exists_in_file "${ip}" "${file_whitelist_ips}" )
         if [[ ${ip_to_ignore} == ${TRUE} ]]
@@ -62,10 +62,10 @@ do
 	# Ban IP if num attempts > x -------------------- 
 	if (( total_attempts_IP_x > ALLOWED_LOGIN_ATTEMPTS ))
 	then
-		echo -e "${total_attempts_IP_x} attempts for IP ${ip}!!!"
-		echo -e "IP to be banned"
+		echo -e "${total_attempts_IP_x} attempts for IP ${ip}! -> Threat!"
 		let bad_ips_counter=bad_ips_counter+1
 		ban_ip_for_SSH "${ip}"
+		#ban_ip_to_ANY "${ip}"
 		add2fileWhithDate "${ip}" "${file_banned_ips}"
 	fi			
 done
